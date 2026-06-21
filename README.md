@@ -1,92 +1,82 @@
-# Prox Founding Engineer Challenge
+# OmniPro 220 Agent — Architecture Demo
 
-<img src="product.webp" alt="Vulcan OmniPro 220" width="400" /> <img src="product-inside.webp" alt="Vulcan OmniPro 220 — inside panel" width="400" />
+A multimodal reasoning agent over the Vulcan OmniPro 220 owner's manual (48 pp),
+built for the [Prox Founding Engineer Challenge](challenge/README.md).
 
-## The Product
+> **What this repo is.** This is a **runnable demo of the retrieval architecture**,
+> not the finished agent. It exists to show *how* the system is decomposed and *why* —
+> the typed knowledge graph, the two-tier router, and the multimodal render decision.
+> The full Claude Agent SDK wiring, page loading, answer generation, and artifact
+> generation are specified but deliberately stubbed. See **[ARCHITECTURE.md](ARCHITECTURE.md)**
+> for the complete decomposition and the line between what's real and what's next.
 
-The [Vulcan OmniPro 220](https://www.harborfreight.com/omnipro-220-industrial-multiprocess-welder-with-120240v-input-57812.html) is a multiprocess welding system sold by Harbor Freight. It supports four welding processes (MIG, Flux-Cored, TIG, and Stick), runs on both 120V and 240V input, and has an LCD-based synergic control system.
+## The core idea
 
-Its owner's manual is 48 pages of dense technical content. Duty cycle matrices across multiple voltages and amperages, polarity setup procedures that differ per welding process, wire feed mechanisms with specific tensioner calibrations, wiring schematics, troubleshooting matrices, weld diagnosis diagrams, and a full parts list.
+A 48-page manual is text **+** tables **+** labeled diagrams **+** photos **+** an
+electrical schematic. Critical answers exist *only as images* (weld-diagnosis photos,
+wiring schematic, polarity socket diagrams). A text-only RAG silently drops these —
+you can even see it: the schematic page's text layer extracts **mirrored**
+(`eriw`=wire, `evlav`=valve), because it's a picture, not text.
 
-This is exactly the kind of product Prox exists for. Nobody knows how to use this machine straight out of the box but has time to read 48 page manual, but a complicated machine needs expert-level support.
+So instead of one flat similarity search, the manual is parsed into a **typed
+knowledge graph**:
 
-Additional video: https://www.youtube.com/watch?v=kxGDoGcnhBw
+- **Nodes** carry a `modality` (`text / table / diagram / photo / schematic / matrix`).
+  This is what makes responses multimodal — routing returns *pointers to assets*, not just text spans.
+- **Edges** are typed (`cause_of`, `prerequisite`, `related`, `same_process`, `contains`).
+  Cross-referencing questions are answered by **graph traversal**, not vibes:
+  *"porosity in flux-cored welds?"* enters at the weld-diagnosis photo node and walks
+  `cause_of` edges to polarity + wire-feed-tension + penetration.
 
-## Your Job
+A **two-tier** flow keeps cost and grounding under control: a cheap/fast model (Haiku)
+reads only the ~2k-token index to pick nodes; the expensive model (Opus) only ever sees
+the handful of *relevant, verified* nodes that were loaded.
 
-Build a multimodal reasoning agent for the Vulcan OmniPro 220 using the Claude Agent SDK. The agent must be able to answer deep technical questions about this product accurately, helpfully, and not just in text.
-
-The manuals are in the `files/` directory.
-
-**There is no limit to how far you can go.** You can integrate voice. You can build a full interactive experience. Sky is the limit. The more ambitious and polished, the better.
-
-## What We're Testing
-
-### 1. Deep Technical Accuracy
-
-Your agent needs to answer questions like these correctly:
-
-- "What's the duty cycle for MIG welding at 200A on 240V?"
-- "I'm getting porosity in my flux-cored welds. What should I check?"
-- "What polarity setup do I need for TIG welding? Which socket does the ground clamp go in?"
-
-We will test with questions that require cross-referencing multiple manual sections, understanding visual content (diagrams, schematics, charts), and handling ambiguous questions that need clarification from the user.
-
-### 2. Multimodal Responses
-
-This is the most important part. Your agent must not be text-only.
-
-- If someone asks about polarity setup, the agent should draw or show a diagram of which cable goes in which socket, not just describe it.
-- If the answer relates to a specific image in the manual (the wire feed mechanism, the front panel controls, the weld diagnosis examples), the agent should surface that image.
-- If a question is complex enough, the agent should generate interactive content: a duty cycle calculator, a troubleshooting flowchart, a settings configurator that takes process + material + thickness and outputs recommended wire speed and voltage.
-
-When something is too cognitively hard to explain in words, the agent should draw it. Real-time diagrams, interactive schematics, visual walkthroughs generated through code.
-
-For your agent to handle these responses well you need to reverse engineer Claude artifacts. Here are two places where you can start:
-- https://claude.ai/artifacts (see how Claude renders interactive artifacts in chat)
-- https://www.reidbarber.com/blog/reverse-engineering-claude-artifacts
-
-### 3. Tone and Helpfulness
-
-Imagine your user just bought this welder and is standing in their garage trying to set it up. They're not an idiot, but they're not a professional welder either.
-
-### 4. Knowledge Extraction Quality
-
-The manual has a mix of text, tables, labeled diagrams, schematics, and decision matrices. Some critical information exists only in images (the welding process selection chart, the weld diagnosis photos, the wiring schematic). We want to see that your agent understands and presents the visual content, not just the text.
-
-## Tech Requirements
-
-- Use the [Anthropic Claude Agent SDK](https://docs.anthropic.com) as the foundation for your agent.
-- The project must run locally with a single API key provided via `.env`.
-- You are responsible for your own API costs during development.
-
-## How to Present Your Work
-
-**This matters.** Your submission is not just the code — it's how you present it.
-
-- **Build a frontend.** The best way for us to evaluate your agent is if it has a clean, simple UI we can run immediately. This is realistically the only way to properly demo an agent like this.
-- **Hosting is a plus.** If you host it somewhere we can access without cloning, that's a strong signal. Not required, but it removes friction and shows initiative.
-- **Write a clear README.** Explain how your agent works, what design decisions you made, how knowledge is extracted and represented, and how to run it. Your documentation will be evaluated — we want to see how you think and communicate, not just how you code.
-- **Video walkthrough is a huge plus.** Record yourself demoing the agent and explaining your approach. Walk through the hard questions, show how it handles multimodal responses, explain your architecture. This gives us a much richer picture of your work than code alone.
-
-We should be running your agent within 2 minutes of cloning your repo:
-
-```bash
-git clone <your-fork>
-cd <your-fork>
-cp .env.example .env   # we plug in our own Anthropic API key
-# your install command (npm install, uv install, etc.)
-# your run command (npm run dev, python app.py, etc.)
+```
+INGEST (build_index.py) → ROUTE/Haiku (router.py) → LOAD → ANSWER/Opus → RENDER decision
 ```
 
-If it takes longer than that to set up, that's a problem.
+## What's in here
 
-## What to Submit
+| File | Stage | Status |
+|------|-------|--------|
+| `build_index.py` | **0 · Ingest** — parse the PDF into a typed graph (`index.json`). Structure (pages, table/image counts → modality) is auto-detected; the semantic layer is curated + grounded here, LLM-generated at ingest in prod. | ✅ real |
+| `index.json` | The built graph: 20 nodes, 28 edges. | ✅ real |
+| `router.py` | **1 · Route** — score query → entry node → graph traversal → underspecification (clarify) check → per-node render decision. Deterministic offline scorer so it runs with **no API key**; `route_with_llm()` shows the Haiku call (same contract). | ✅ real |
+| `graph_demo.html` | Interactive visualization — type a question, watch the entry node strike and current flow along the cross-reference edges; side panel shows the load plan with per-node render decisions. Self-contained (graph inlined). | ✅ real |
+| **Stages 2–4** | Load pages + Opus answer + artifact *generation* (duty-cycle calculator, settings configurator, troubleshooting flowchart) and the Agent SDK + frontend wiring. | 🚧 specified, next |
 
-1. Fork this repo.
-2. Build your solution.
-3. Submit your fork URL through the form at [useprox.com/join/challenge](https://useprox.com/join/challenge).
+## Run
 
-## What Happens Next
+No API key needed — the demo runs on a deterministic offline scorer.
 
-We review submissions on a rolling basis and respond to every single one within a few days. Good luck.
+```bash
+# interactive visualization (self-contained, nothing to install)
+open graph_demo.html
+
+# routing trace on the challenge's 3 sample questions + 1 underspecified one
+python router.py
+
+# (optional) rebuild the graph from the PDF
+pip install pdfplumber
+python build_index.py        # reads challenge/files/owner-manual.pdf → index.json
+```
+
+`router.py` reproduces the challenge's three test questions plus a deliberately
+underspecified one (*"What's the duty cycle?"* → asks for process/amperage/voltage
+before answering).
+
+## Repo layout
+
+```
+.
+├── README.md            ← you are here (the solution)
+├── ARCHITECTURE.md      ← full problem decomposition + design decisions
+├── build_index.py       ← Stage 0: PDF → typed knowledge graph
+├── index.json           ← the built graph (20 nodes, 28 edges)
+├── router.py            ← Stage 1: two-tier router + render decision
+├── graph_demo.html      ← interactive visualization of the router
+└── challenge/           ← the original challenge brief + product manuals
+    ├── README.md
+    └── files/           ← owner-manual.pdf, quick-start-guide.pdf, selection-chart.pdf
+```

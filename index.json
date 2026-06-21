@@ -1,0 +1,716 @@
+{
+  "product": "Vulcan OmniPro 220 (Harbor Freight #57812)",
+  "source": "owner-manual.pdf (48 pages)",
+  "nodes": [
+    {
+      "id": "safety",
+      "type": "section",
+      "title": "Safety",
+      "pages": [
+        2,
+        6
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": false,
+      "auto_keywords": [
+        "welder",
+        "welding",
+        "safety",
+        "keep",
+        "wire",
+        "fire",
+        "wear",
+        "welders"
+      ],
+      "summary": "Safety: manual pages 2-6."
+    },
+    {
+      "id": "specs",
+      "type": "section",
+      "title": "Specifications",
+      "pages": [
+        7,
+        7
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": false,
+      "auto_keywords": [
+        "input",
+        "current",
+        "steel",
+        "welding",
+        "power",
+        "output",
+        "range",
+        "rated"
+      ],
+      "summary": "Specifications: manual pages 7-7."
+    },
+    {
+      "id": "controls",
+      "type": "section",
+      "title": "Controls",
+      "pages": [
+        8,
+        9
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": false,
+      "auto_keywords": [
+        "wire",
+        "spool",
+        "feed",
+        "knob",
+        "socket",
+        "controls",
+        "page",
+        "technical"
+      ],
+      "summary": "Controls: manual pages 8-9."
+    },
+    {
+      "id": "mig",
+      "type": "section",
+      "title": "MIG / Flux-Cored Wire Welding",
+      "pages": [
+        10,
+        23
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": true,
+      "auto_keywords": [
+        "wire",
+        "welding",
+        "feed",
+        "spool",
+        "welder",
+        "knob",
+        "power",
+        "cable"
+      ],
+      "summary": "MIG / Flux-Cored Wire Welding: manual pages 10-23."
+    },
+    {
+      "id": "tig",
+      "type": "section",
+      "title": "TIG / Stick Welding",
+      "pages": [
+        24,
+        33
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": true,
+      "auto_keywords": [
+        "electrode",
+        "welding",
+        "welder",
+        "knob",
+        "weld",
+        "turn",
+        "torch",
+        "control"
+      ],
+      "summary": "TIG / Stick Welding: manual pages 24-33."
+    },
+    {
+      "id": "tips",
+      "type": "section",
+      "title": "Welding Tips",
+      "pages": [
+        34,
+        40
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": true,
+      "auto_keywords": [
+        "weld",
+        "speed",
+        "wire",
+        "welding",
+        "workpiece",
+        "increase",
+        "penetration",
+        "material"
+      ],
+      "summary": "Welding Tips: manual pages 34-40."
+    },
+    {
+      "id": "maintenance",
+      "type": "section",
+      "title": "Maintenance",
+      "pages": [
+        41,
+        45
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": false,
+      "auto_keywords": [
+        "wire",
+        "check",
+        "feed",
+        "welder",
+        "contact",
+        "welding",
+        "properly",
+        "ensure"
+      ],
+      "summary": "Maintenance: manual pages 41-45."
+    },
+    {
+      "id": "parts",
+      "type": "section",
+      "title": "Parts List and Diagram",
+      "pages": [
+        46,
+        47
+      ],
+      "modality": "text",
+      "has_tables": true,
+      "has_images": false,
+      "auto_keywords": [
+        "parts",
+        "cover",
+        "product",
+        "assembly",
+        "handle",
+        "connector",
+        "radiator",
+        "igbt"
+      ],
+      "summary": "Parts List and Diagram: manual pages 46-47."
+    },
+    {
+      "id": "warranty",
+      "type": "section",
+      "title": "Warranty",
+      "pages": [
+        48,
+        48
+      ],
+      "modality": "text",
+      "has_tables": false,
+      "has_images": false,
+      "auto_keywords": [
+        "warranty",
+        "product",
+        "purchase",
+        "must",
+        "defect",
+        "products",
+        "date",
+        "apply"
+      ],
+      "summary": "Warranty: manual pages 48-48."
+    },
+    {
+      "id": "duty_cycle_table",
+      "type": "asset",
+      "title": "Duty Cycle Matrix (MIG/TIG/Stick, 120V & 240V)",
+      "pages": [
+        7,
+        7
+      ],
+      "modality": "table",
+      "parent": "specs",
+      "keywords": [
+        "duty cycle",
+        "amperage",
+        "200a",
+        "240v",
+        "120v",
+        "overheat",
+        "rated",
+        "thermal"
+      ],
+      "auto_keywords": [
+        "input",
+        "current",
+        "steel",
+        "welding",
+        "power",
+        "output"
+      ],
+      "answers": [
+        "What's the duty cycle for MIG at 200A on 240V?",
+        "How long can I weld before it overheats at 150A?"
+      ],
+      "summary": "Duty Cycle Matrix (MIG/TIG/Stick, 120V & 240V)"
+    },
+    {
+      "id": "controls_panel",
+      "type": "asset",
+      "title": "Front Panel / LCD Synergic Controls",
+      "pages": [
+        8,
+        8
+      ],
+      "modality": "diagram",
+      "parent": "controls",
+      "keywords": [
+        "control",
+        "lcd",
+        "knob",
+        "panel",
+        "synergic",
+        "display",
+        "setting"
+      ],
+      "auto_keywords": [
+        "spool",
+        "controls",
+        "knob",
+        "socket",
+        "wire",
+        "button"
+      ],
+      "answers": [
+        "What does each knob on the front do?"
+      ],
+      "summary": "Front Panel / LCD Synergic Controls"
+    },
+    {
+      "id": "mig_wire_setup",
+      "type": "asset",
+      "title": "MIG Wire Spool Installation & Wire Feed Path",
+      "pages": [
+        10,
+        10
+      ],
+      "modality": "diagram",
+      "parent": "mig",
+      "keywords": [
+        "spool",
+        "wire",
+        "install",
+        "feed",
+        "door latch",
+        "wingnut",
+        "liner",
+        "load wire"
+      ],
+      "auto_keywords": [
+        "spool",
+        "wire",
+        "welder",
+        "door",
+        "wingnut",
+        "welding"
+      ],
+      "answers": [
+        "How do I load the wire spool?"
+      ],
+      "summary": "MIG Wire Spool Installation & Wire Feed Path"
+    },
+    {
+      "id": "wire_feed_tension",
+      "type": "asset",
+      "title": "Drive Roll & Tensioner Calibration",
+      "pages": [
+        19,
+        19
+      ],
+      "modality": "diagram",
+      "parent": "mig",
+      "keywords": [
+        "tension",
+        "drive roll",
+        "tensioner",
+        "wire feed",
+        "slipping",
+        "birdnest",
+        "pressure"
+      ],
+      "auto_keywords": [
+        "welding",
+        "welder",
+        "minutes",
+        "duty",
+        "cycle",
+        "weld"
+      ],
+      "answers": [
+        "My wire keeps birdnesting / slipping \u2014 what tension?"
+      ],
+      "summary": "Drive Roll & Tensioner Calibration"
+    },
+    {
+      "id": "mig_polarity",
+      "type": "asset",
+      "title": "MIG vs Flux-Cored Polarity & Cable Sockets",
+      "pages": [
+        11,
+        11
+      ],
+      "modality": "diagram",
+      "parent": "mig",
+      "keywords": [
+        "polarity",
+        "dcen",
+        "dcep",
+        "electrode positive",
+        "socket",
+        "ground clamp",
+        "flux-cored",
+        "gas"
+      ],
+      "auto_keywords": [
+        "spool",
+        "wire",
+        "adapter",
+        "wingnut",
+        "knob",
+        "remove"
+      ],
+      "answers": [
+        "What polarity for flux-cored vs gas MIG? Which socket?"
+      ],
+      "summary": "MIG vs Flux-Cored Polarity & Cable Sockets"
+    },
+    {
+      "id": "tig_polarity",
+      "type": "asset",
+      "title": "TIG/Stick Polarity & Ground Clamp Socket",
+      "pages": [
+        24,
+        24
+      ],
+      "modality": "diagram",
+      "parent": "tig",
+      "keywords": [
+        "polarity",
+        "tig",
+        "stick",
+        "dcen",
+        "ground clamp",
+        "socket",
+        "torch",
+        "electrode negative"
+      ],
+      "auto_keywords": [
+        "welder",
+        "foot",
+        "pedal",
+        "socket",
+        "cable",
+        "sold"
+      ],
+      "answers": [
+        "What polarity setup for TIG? Which socket does the ground clamp go in?"
+      ],
+      "summary": "TIG/Stick Polarity & Ground Clamp Socket"
+    },
+    {
+      "id": "penetration_control",
+      "type": "asset",
+      "title": "Workpiece Heat / Weld Penetration Control",
+      "pages": [
+        35,
+        35
+      ],
+      "modality": "table",
+      "parent": "tips",
+      "keywords": [
+        "penetration",
+        "heat",
+        "ctwd",
+        "travel speed",
+        "current",
+        "thickness",
+        "burn-through"
+      ],
+      "auto_keywords": [
+        "wire",
+        "weld",
+        "penetration",
+        "increase",
+        "feed",
+        "travel"
+      ],
+      "answers": [
+        "My welds aren't penetrating \u2014 what do I change?"
+      ],
+      "summary": "Workpiece Heat / Weld Penetration Control"
+    },
+    {
+      "id": "weld_diagnosis",
+      "type": "asset",
+      "title": "Weld Diagnosis Photos (porosity, voltage, speed, polarity)",
+      "pages": [
+        35,
+        35
+      ],
+      "modality": "photo",
+      "parent": "tips",
+      "keywords": [
+        "porosity",
+        "weld defect",
+        "diagnosis",
+        "voltage too high",
+        "travel speed",
+        "wrong polarity",
+        "bad weld",
+        "spatter",
+        "undercut"
+      ],
+      "auto_keywords": [
+        "wire",
+        "weld",
+        "penetration",
+        "increase",
+        "feed",
+        "travel"
+      ],
+      "answers": [
+        "I'm getting porosity in my flux-cored welds. What should I check?",
+        "Why does my bead look like this?"
+      ],
+      "summary": "Weld Diagnosis Photos (porosity, voltage, speed, polarity)"
+    },
+    {
+      "id": "troubleshooting",
+      "type": "asset",
+      "title": "Troubleshooting Matrix",
+      "pages": [
+        42,
+        42
+      ],
+      "modality": "matrix",
+      "parent": "maintenance",
+      "keywords": [
+        "troubleshoot",
+        "error",
+        "no arc",
+        "won't feed",
+        "fault",
+        "problem",
+        "not working",
+        "overheating"
+      ],
+      "auto_keywords": [
+        "wire",
+        "feed",
+        "cable",
+        "liner",
+        "check",
+        "welding"
+      ],
+      "answers": [
+        "The welder won't strike an arc \u2014 what now?"
+      ],
+      "summary": "Troubleshooting Matrix"
+    },
+    {
+      "id": "wiring_schematic",
+      "type": "asset",
+      "title": "Electrical Wiring Schematic",
+      "pages": [
+        45,
+        45
+      ],
+      "modality": "schematic",
+      "parent": "maintenance",
+      "keywords": [
+        "wiring",
+        "schematic",
+        "electrical",
+        "rectifier",
+        "circuit",
+        "hall",
+        "transformer",
+        "cn1"
+      ],
+      "auto_keywords": [
+        "eriw",
+        "noitaiva",
+        "gulp",
+        "dionelos",
+        "evlav",
+        "draob"
+      ],
+      "answers": [
+        "Where does this wire go on the board?"
+      ],
+      "summary": "Electrical Wiring Schematic"
+    },
+    {
+      "id": "parts_diagram",
+      "type": "asset",
+      "title": "Exploded Parts Diagram & Parts List",
+      "pages": [
+        46,
+        46
+      ],
+      "modality": "diagram",
+      "parent": "parts",
+      "keywords": [
+        "parts",
+        "replacement",
+        "exploded",
+        "assembly",
+        "part number",
+        "spare"
+      ],
+      "auto_keywords": [
+        "parts",
+        "cover",
+        "product",
+        "handle",
+        "connector",
+        "radiator"
+      ],
+      "answers": [
+        "What's the part number for the drive roll?"
+      ],
+      "summary": "Exploded Parts Diagram & Parts List"
+    }
+  ],
+  "edges": [
+    {
+      "src": "specs",
+      "dst": "duty_cycle_table",
+      "rel": "contains"
+    },
+    {
+      "src": "controls",
+      "dst": "controls_panel",
+      "rel": "contains"
+    },
+    {
+      "src": "mig",
+      "dst": "mig_wire_setup",
+      "rel": "contains"
+    },
+    {
+      "src": "mig",
+      "dst": "wire_feed_tension",
+      "rel": "contains"
+    },
+    {
+      "src": "mig",
+      "dst": "mig_polarity",
+      "rel": "contains"
+    },
+    {
+      "src": "tig",
+      "dst": "tig_polarity",
+      "rel": "contains"
+    },
+    {
+      "src": "tips",
+      "dst": "penetration_control",
+      "rel": "contains"
+    },
+    {
+      "src": "tips",
+      "dst": "weld_diagnosis",
+      "rel": "contains"
+    },
+    {
+      "src": "maintenance",
+      "dst": "troubleshooting",
+      "rel": "contains"
+    },
+    {
+      "src": "maintenance",
+      "dst": "wiring_schematic",
+      "rel": "contains"
+    },
+    {
+      "src": "parts",
+      "dst": "parts_diagram",
+      "rel": "contains"
+    },
+    {
+      "src": "mig_wire_setup",
+      "dst": "mig_polarity",
+      "rel": "same_process"
+    },
+    {
+      "src": "mig_polarity",
+      "dst": "wire_feed_tension",
+      "rel": "same_process"
+    },
+    {
+      "src": "weld_diagnosis",
+      "dst": "mig_polarity",
+      "rel": "cause_of"
+    },
+    {
+      "src": "weld_diagnosis",
+      "dst": "tig_polarity",
+      "rel": "cause_of"
+    },
+    {
+      "src": "weld_diagnosis",
+      "dst": "wire_feed_tension",
+      "rel": "cause_of"
+    },
+    {
+      "src": "weld_diagnosis",
+      "dst": "penetration_control",
+      "rel": "related"
+    },
+    {
+      "src": "penetration_control",
+      "dst": "duty_cycle_table",
+      "rel": "related"
+    },
+    {
+      "src": "troubleshooting",
+      "dst": "duty_cycle_table",
+      "rel": "related"
+    },
+    {
+      "src": "troubleshooting",
+      "dst": "wire_feed_tension",
+      "rel": "related"
+    },
+    {
+      "src": "troubleshooting",
+      "dst": "mig_polarity",
+      "rel": "related"
+    },
+    {
+      "src": "mig_wire_setup",
+      "dst": "wire_feed_tension",
+      "rel": "prerequisite"
+    },
+    {
+      "src": "mig_polarity",
+      "dst": "mig_wire_setup",
+      "rel": "prerequisite"
+    },
+    {
+      "src": "duty_cycle_table",
+      "dst": "specs",
+      "rel": "part_of"
+    },
+    {
+      "src": "parts_diagram",
+      "dst": "wiring_schematic",
+      "rel": "related"
+    },
+    {
+      "src": "mig",
+      "dst": "safety",
+      "rel": "prerequisite"
+    },
+    {
+      "src": "tig",
+      "dst": "safety",
+      "rel": "prerequisite"
+    },
+    {
+      "src": "maintenance",
+      "dst": "safety",
+      "rel": "prerequisite"
+    }
+  ]
+}

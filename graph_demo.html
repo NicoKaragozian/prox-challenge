@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>OmniPro 220 · Knowledge Graph Router</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root{
+    --bg:#0b0e13; --panel:#0f141b; --panel2:#141a22; --line:#222b37;
+    --ink:#cdd6e2; --muted:#74828f; --faint:#3a4654;
+    --arc:#4dd9ff; --molten:#ff7d2e; --warn:#ffd24d;
+    --m-text:#5b6b7d; --m-table:#f2b441; --m-diagram:#4cc38a;
+    --m-photo:#e85c9b; --m-schematic:#4dd9ff; --m-matrix:#a986f0; --m-section:#46566a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:"Inter",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    display:flex; flex-direction:column; height:100vh; overflow:hidden;
+  }
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+  header{
+    padding:14px 20px; border-bottom:1px solid var(--line);
+    display:flex; align-items:baseline; gap:18px; flex-wrap:wrap;
+  }
+  header h1{font-size:15px; margin:0; letter-spacing:.02em; font-weight:600}
+  header h1 b{color:var(--arc)}
+  header .sub{font-size:12px; color:var(--muted)}
+  .pipeline{margin-left:auto; display:flex; gap:8px; align-items:center; font-size:11px}
+  .pipeline span{padding:3px 9px; border:1px solid var(--line); border-radius:999px; color:var(--muted)}
+  .pipeline span b{color:var(--ink); font-weight:600}
+  .pipeline .arrow{border:none; color:var(--faint)}
+
+  main{flex:1; display:flex; min-height:0}
+  #stage{flex:1; position:relative; min-width:0}
+  svg{width:100%; height:100%; display:block}
+
+  aside{
+    width:374px; border-left:1px solid var(--line); background:var(--panel);
+    display:flex; flex-direction:column; min-height:0;
+  }
+  .ask{padding:16px; border-bottom:1px solid var(--line)}
+  .ask label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
+  .ask input{
+    width:100%; margin-top:8px; padding:10px 12px; background:var(--bg);
+    border:1px solid var(--line); border-radius:8px; color:var(--ink); font-size:13px;
+  }
+  .ask input:focus{outline:none; border-color:var(--arc)}
+  .chips{display:flex; flex-direction:column; gap:6px; margin-top:10px}
+  .chip{
+    text-align:left; cursor:pointer; font-size:12px; line-height:1.3;
+    padding:8px 10px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:7px; color:var(--ink); transition:.12s;
+  }
+  .chip:hover{border-color:var(--arc); color:#fff}
+  .chip .tag{font-size:10px; color:var(--muted)}
+
+  .out{flex:1; overflow-y:auto; padding:16px}
+  .out h2{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 4px}
+  .clarify{
+    border:1px solid var(--warn); background:rgba(255,210,77,.06);
+    color:var(--warn); padding:11px 12px; border-radius:8px; font-size:12.5px; line-height:1.45;
+  }
+  .row{
+    display:flex; gap:10px; align-items:flex-start; padding:9px 0;
+    border-bottom:1px solid var(--line);
+  }
+  .dot{width:9px;height:9px;border-radius:50%;margin-top:4px;flex:none}
+  .row .body{flex:1; min-width:0}
+  .row .ttl{font-size:12.5px; color:var(--ink)}
+  .row .meta{font-size:11px; color:var(--muted); margin-top:2px; display:flex; gap:8px; flex-wrap:wrap}
+  .via{font-size:9.5px; padding:1px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted)}
+  .via.entry{color:var(--arc); border-color:var(--arc)}
+  .render{font-size:10px; padding:1px 6px; border-radius:4px; font-weight:600}
+  .render.surface{color:#06222b; background:var(--arc)}
+  .render.generate{color:#2a1402; background:var(--molten)}
+  .render.text{color:#0b0e13; background:var(--m-text)}
+  .empty{color:var(--muted); font-size:12.5px; line-height:1.5}
+
+  .legend{position:absolute; left:14px; bottom:14px; font-size:11px;
+    background:rgba(11,14,19,.78); border:1px solid var(--line); border-radius:9px; padding:10px 12px; backdrop-filter:blur(4px)}
+  .legend .grp{display:flex; gap:12px; flex-wrap:wrap; max-width:430px}
+  .legend .k{display:flex; align-items:center; gap:5px; color:var(--muted)}
+  .legend .k i{width:9px;height:9px;border-radius:50%;display:inline-block}
+  .legend hr{border:none; border-top:1px solid var(--line); margin:8px 0}
+  .legend .e{display:flex; align-items:center; gap:5px}
+  .legend .e i{width:16px;height:0;border-top:2px solid}
+
+  text{font-family:ui-monospace,Menlo,monospace; pointer-events:none; user-select:none}
+  .nodeLabel{font-size:9.5px; fill:var(--muted)}
+  .nodeLabel.on{fill:var(--ink)}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>OmniPro 220</b> · Knowledge-Graph Router</h1>
+  <span class="sub mono">20 nodes · 28 edges · built from owner-manual.pdf (48 pp)</span>
+  <div class="pipeline mono">
+    <span>① <b>Index</b></span><span class="arrow">→</span>
+    <span>② <b>Route</b> · Haiku</span><span class="arrow">→</span>
+    <span>③ <b>Answer</b> · Opus</span>
+  </div>
+</header>
+
+<main>
+  <div id="stage">
+    <svg id="svg"></svg>
+    <div class="legend mono">
+      <div class="grp" id="modLegend"></div>
+      <hr/>
+      <div class="grp">
+        <span class="e"><i style="border-color:var(--molten)"></i>cause_of</span>
+        <span class="e"><i style="border-color:var(--arc)"></i>related / prereq</span>
+        <span class="e"><i style="border-color:var(--faint);border-top-style:dashed"></i>contains</span>
+      </div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="ask">
+      <label>User question</label>
+      <input id="q" placeholder="ask the welder…" autocomplete="off"/>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="out" id="out">
+      <p class="empty">Pick a question. The fast model reads only the <b>index</b> (titles + modality + keywords, ~2k tokens), selects an entry node, then walks the graph along semantic edges. Only the selected nodes get loaded — full pages and rasterized diagrams — before the answer model runs.</p>
+    </div>
+  </aside>
+</main>
+
+<script>
+/* ---------- graph (built offline by build_index.py) ---------- */
+const DATA = {"nodes":[{"id":"safety","type":"section","title":"Safety","pages":[2,6],"modality":"text","auto_keywords":["welder","welding","safety","keep","wire","fire","wear"]},
+{"id":"specs","type":"section","title":"Specifications","pages":[7,7],"modality":"text","auto_keywords":["input","current","steel","welding","power","output","range","rated"]},
+{"id":"controls","type":"section","title":"Controls","pages":[8,9],"modality":"text","auto_keywords":["wire","spool","feed","knob","socket","controls"]},
+{"id":"mig","type":"section","title":"MIG / Flux-Cored","pages":[10,23],"modality":"text","auto_keywords":["wire","welding","feed","spool","cable"]},
+{"id":"tig","type":"section","title":"TIG / Stick","pages":[24,33],"modality":"text","auto_keywords":["electrode","welding","torch","control"]},
+{"id":"tips","type":"section","title":"Welding Tips","pages":[34,40],"modality":"text","auto_keywords":["weld","speed","wire","workpiece","penetration","material"]},
+{"id":"maintenance","type":"section","title":"Maintenance","pages":[41,45],"modality":"text","auto_keywords":["wire","check","feed","contact","ensure"]},
+{"id":"parts","type":"section","title":"Parts List","pages":[46,47],"modality":"text","auto_keywords":["parts","cover","assembly","connector"]},
+{"id":"warranty","type":"section","title":"Warranty","pages":[48,48],"modality":"text","auto_keywords":["warranty","purchase","defect","date"]},
+{"id":"duty_cycle_table","type":"asset","title":"Duty Cycle Matrix","pages":[7,7],"modality":"table","keywords":["duty cycle","amperage","200a","240v","120v","overheat","rated","thermal"],"answers":["What's the duty cycle for MIG at 200A on 240V?","How long can I weld before it overheats at 150A?"],"parent":"specs"},
+{"id":"controls_panel","type":"asset","title":"Front Panel / LCD","pages":[8,8],"modality":"diagram","keywords":["control","lcd","knob","panel","synergic","display","setting"],"answers":["What does each knob on the front do?"],"parent":"controls"},
+{"id":"mig_wire_setup","type":"asset","title":"Wire Spool Install","pages":[10,10],"modality":"diagram","keywords":["spool","wire","install","feed","door latch","wingnut","liner","load wire"],"answers":["How do I load the wire spool?"],"parent":"mig"},
+{"id":"wire_feed_tension","type":"asset","title":"Drive Roll Tension","pages":[19,19],"modality":"diagram","keywords":["tension","drive roll","tensioner","wire feed","slipping","birdnest","pressure"],"answers":["My wire keeps birdnesting / slipping — what tension?"],"parent":"mig"},
+{"id":"mig_polarity","type":"asset","title":"MIG / Flux Polarity","pages":[11,11],"modality":"diagram","keywords":["polarity","dcen","dcep","electrode positive","socket","ground clamp","flux-cored","gas"],"answers":["What polarity for flux-cored vs gas MIG? Which socket?"],"parent":"mig"},
+{"id":"tig_polarity","type":"asset","title":"TIG/Stick Polarity","pages":[24,24],"modality":"diagram","keywords":["polarity","tig","stick","dcen","ground clamp","socket","torch","electrode negative"],"answers":["What polarity setup for TIG? Which socket does the ground clamp go in?"],"parent":"tig"},
+{"id":"penetration_control","type":"asset","title":"Penetration Control","pages":[35,35],"modality":"table","keywords":["penetration","heat","ctwd","travel speed","current","thickness","burn-through"],"answers":["My welds aren't penetrating — what do I change?"],"parent":"tips"},
+{"id":"weld_diagnosis","type":"asset","title":"Weld Diagnosis Photos","pages":[35,35],"modality":"photo","keywords":["porosity","weld defect","diagnosis","voltage too high","travel speed","wrong polarity","bad weld","spatter","undercut"],"answers":["I'm getting porosity in my flux-cored welds. What should I check?","Why does my bead look like this?"],"parent":"tips"},
+{"id":"troubleshooting","type":"asset","title":"Troubleshooting Matrix","pages":[42,42],"modality":"matrix","keywords":["troubleshoot","error","no arc","won't feed","fault","problem","not working","overheating"],"answers":["The welder won't strike an arc — what now?"],"parent":"maintenance"},
+{"id":"wiring_schematic","type":"asset","title":"Wiring Schematic","pages":[45,45],"modality":"schematic","keywords":["wiring","schematic","electrical","rectifier","circuit","hall","transformer","cn1"],"answers":["Where does this wire go on the board?"],"parent":"maintenance"},
+{"id":"parts_diagram","type":"asset","title":"Exploded Parts Diagram","pages":[46,46],"modality":"diagram","keywords":["parts","replacement","exploded","assembly","part number","spare"],"answers":["What's the part number for the drive roll?"],"parent":"parts"}],
+"edges":[{"src":"specs","dst":"duty_cycle_table","rel":"contains"},{"src":"controls","dst":"controls_panel","rel":"contains"},{"src":"mig","dst":"mig_wire_setup","rel":"contains"},{"src":"mig","dst":"wire_feed_tension","rel":"contains"},{"src":"mig","dst":"mig_polarity","rel":"contains"},{"src":"tig","dst":"tig_polarity","rel":"contains"},{"src":"tips","dst":"penetration_control","rel":"contains"},{"src":"tips","dst":"weld_diagnosis","rel":"contains"},{"src":"maintenance","dst":"troubleshooting","rel":"contains"},{"src":"maintenance","dst":"wiring_schematic","rel":"contains"},{"src":"parts","dst":"parts_diagram","rel":"contains"},{"src":"mig_wire_setup","dst":"mig_polarity","rel":"same_process"},{"src":"mig_polarity","dst":"wire_feed_tension","rel":"same_process"},{"src":"weld_diagnosis","dst":"mig_polarity","rel":"cause_of"},{"src":"weld_diagnosis","dst":"tig_polarity","rel":"cause_of"},{"src":"weld_diagnosis","dst":"wire_feed_tension","rel":"cause_of"},{"src":"weld_diagnosis","dst":"penetration_control","rel":"related"},{"src":"penetration_control","dst":"duty_cycle_table","rel":"related"},{"src":"troubleshooting","dst":"duty_cycle_table","rel":"related"},{"src":"troubleshooting","dst":"wire_feed_tension","rel":"related"},{"src":"troubleshooting","dst":"mig_polarity","rel":"related"},{"src":"mig_wire_setup","dst":"wire_feed_tension","rel":"prerequisite"},{"src":"mig_polarity","dst":"mig_wire_setup","rel":"prerequisite"},{"src":"duty_cycle_table","dst":"specs","rel":"part_of"},{"src":"parts_diagram","dst":"wiring_schematic","rel":"related"},{"src":"mig","dst":"safety","rel":"prerequisite"},{"src":"tig","dst":"safety","rel":"prerequisite"},{"src":"maintenance","dst":"safety","rel":"prerequisite"}]};
+
+const MOD_COLOR={text:"#5b6b7d",table:"#f2b441",diagram:"#4cc38a",photo:"#e85c9b",schematic:"#4dd9ff",matrix:"#a986f0",section:"#46566a"};
+const SURFACE=new Set(["diagram","photo","schematic"]);
+const ARTIFACT={duty_cycle_table:"duty-cycle calculator",penetration_control:"settings configurator",troubleshooting:"troubleshooting flowchart"};
+const TRAVERSE=new Set(["cause_of","related","prerequisite","same_process"]);
+const NEEDS={duty_cycle_table:["process","amperage","voltage"]};
+const N=Object.fromEntries(DATA.nodes.map(n=>[n.id,n]));
+
+/* adjacency with relation */
+const ADJ={};
+DATA.edges.forEach(e=>{(ADJ[e.src]=ADJ[e.src]||[]).push([e.dst,e.rel]);(ADJ[e.dst]=ADJ[e.dst]||[]).push([e.src,e.rel]);});
+
+const QSTOP=new Set("the a an of to and or for with on in is be are this that your you it do not what which does i'm im need get getting should my me at as go in".split(" "));
+const tok=(s,drop=false)=>{let t=new Set((s.toLowerCase().match(/[a-z0-9][a-z0-9\-]{2,}/g)||[]));if(drop)QSTOP.forEach(w=>t.delete(w));return t;};
+
+function score(query){
+  const q=tok(query,true), out=[];
+  for(const n of DATA.nodes){
+    let kw=new Set([...(n.keywords||[]),...(n.auto_keywords||[])]), kt=new Set();
+    kw.forEach(k=>tok(k).forEach(x=>kt.add(x)));
+    let at=new Set(); (n.answers||[]).forEach(a=>tok(a).forEach(x=>at.add(x)));
+    let hits=[...q].filter(x=>kt.has(x)), ah=[...q].filter(x=>at.has(x));
+    let s=2*hits.length+3*ah.length;
+    if(n.type==="asset"&&s>0)s+=0.5;
+    if(s>0)out.push({s,id:n.id,hits:[...new Set([...hits,...ah])]});
+  }
+  return out.sort((a,b)=>b.s-a.s);
+}
+function mentions(q,p){const l=q.toLowerCase();const m={process:["mig","tig","stick","flux"],amperage:[/\d+\s*a/,"amp"],voltage:["120","240","volt"]};return (m[p]||[]).some(k=>k instanceof RegExp?k.test(l):l.includes(k));}
+
+function route(query){
+  const ranked=score(query);
+  if(!ranked.length)return{query,clarify:"No index match — escalate to full-text search.",rows:[],edges:[],entry:[]};
+  const best=ranked[0].s;
+  const entry=ranked.filter(r=>r.s>=0.6*best).slice(0,3).map(r=>r.id);
+  const top=entry[0];
+  if(NEEDS[top]){const miss=NEEDS[top].filter(p=>!mentions(query,p));
+    if(miss.length)return{query,entry,clarify:`“${N[top].title}” needs: ${miss.join(", ")}. Ask the user before answering.`,rows:[],edges:[]};}
+  // traverse semantic edges, 1 hop, cap fan-out
+  const sel=[...entry], used=[];
+  for(const nid of entry){
+    let c=0;
+    for(const [nb,rel] of (ADJ[nid]||[])){
+      if(!TRAVERSE.has(rel))continue;
+      if(c++>=4)break;
+      if(!sel.includes(nb)){sel.push(nb);used.push({src:nid,dst:nb,rel});}
+    }
+  }
+  const rows=sel.map(id=>{const n=N[id];let render,cls;
+    if(ARTIFACT[id]){render="GENERATE "+ARTIFACT[id];cls="generate";}
+    else if(SURFACE.has(n.modality)){render=`SURFACE p${n.pages[0]} image`;cls="surface";}
+    else{render="TEXT (grounded)";cls="text";}
+    return{id,title:n.title,page:n.pages[0],modality:n.modality,via:entry.includes(id)?"entry":"hop",render,cls};});
+  return{query,entry,rows,edges:used,matched:ranked[0].hits};
+}
+
+/* ---------- render graph ---------- */
+const svg=d3.select("#svg"), stage=document.getElementById("stage");
+let W=stage.clientWidth,H=stage.clientHeight;
+const nodes=DATA.nodes.map(d=>({...d})), eid=n=>n;
+const links=DATA.edges.map(e=>({source:e.src,target:e.dst,rel:e.rel}));
+
+const g=svg.append("g");
+const linkSel=g.append("g").attr("stroke-linecap","round").selectAll("line").data(links).join("line")
+  .attr("stroke",d=>d.rel==="contains"?"var(--faint)":"#2b3947")
+  .attr("stroke-dasharray",d=>d.rel==="contains"?"2 4":null)
+  .attr("stroke-width",1);
+
+const nodeSel=g.append("g").selectAll("g").data(nodes).join("g").style("cursor","grab");
+nodeSel.append("circle")
+  .attr("r",d=>d.type==="section"?12:8)
+  .attr("fill",d=>d.type==="section"?"none":MOD_COLOR[d.modality])
+  .attr("stroke",d=>d.type==="section"?MOD_COLOR.section:"#0b0e13")
+  .attr("stroke-width",d=>d.type==="section"?1.5:1.5);
+nodeSel.append("text").attr("class","nodeLabel").attr("text-anchor","middle")
+  .attr("dy",d=>d.type==="section"?-16:-12).text(d=>d.title);
+
+const sim=d3.forceSimulation(nodes)
+  .force("link",d3.forceLink(links).id(d=>d.id).distance(d=>d.rel==="contains"?52:78).strength(.5))
+  .force("charge",d3.forceManyBody().strength(-340))
+  .force("center",d3.forceCenter(W/2,H/2))
+  .force("collide",d3.forceCollide(26))
+  .on("tick",tick);
+function tick(){
+  linkSel.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+  nodeSel.attr("transform",d=>`translate(${d.x},${d.y})`);
+}
+nodeSel.call(d3.drag()
+  .on("start",(e,d)=>{if(!e.active)sim.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y;})
+  .on("drag",(e,d)=>{d.fx=e.x;d.fy=e.y;})
+  .on("end",(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null;}));
+window.addEventListener("resize",()=>{W=stage.clientWidth;H=stage.clientHeight;sim.force("center",d3.forceCenter(W/2,H/2)).alpha(.3).restart();});
+
+/* legend */
+const ml=document.getElementById("modLegend");
+[["section","section"],["text","text"],["table","table"],["diagram","diagram"],["photo","photo"],["schematic","schematic"],["matrix","matrix"]]
+.forEach(([k,l])=>{const s=document.createElement("span");s.className="k";s.innerHTML=`<i style="background:${MOD_COLOR[k]}"></i>${l}`;ml.appendChild(s);});
+
+/* ---------- interaction / highlight ---------- */
+function paint(res){
+  const sel=new Set(res.rows.map(r=>r.id).concat(res.entry||[]));
+  const entry=new Set(res.entry||[]);
+  const usedKey=new Set(res.edges.map(e=>e.src+">"+e.dst).concat(res.edges.map(e=>e.dst+">"+e.src)));
+  nodeSel.select("circle").transition().duration(280)
+    .attr("opacity",d=> sel.size? (sel.has(d.id)?1:0.12):1)
+    .attr("stroke",d=> entry.has(d.id)?"var(--arc)": (d.type==="section"?MOD_COLOR.section:"#0b0e13"))
+    .attr("stroke-width",d=> entry.has(d.id)?3:1.5)
+    .attr("r",d=> entry.has(d.id)?(d.type==="section"?14:11):(d.type==="section"?12:8));
+  nodeSel.select("text").attr("class",d=>"nodeLabel"+(sel.has(d.id)?" on":""))
+    .transition().duration(280).attr("opacity",d=> sel.size?(sel.has(d.id)?1:0.15):1);
+  linkSel.transition().duration(280)
+    .attr("stroke",d=>{const k=d.source.id+">"+d.target.id;
+      if(usedKey.has(k))return d.rel==="cause_of"?"var(--molten)":"var(--arc)";
+      return d.rel==="contains"?"var(--faint)":"#2b3947";})
+    .attr("stroke-width",d=>usedKey.has(d.source.id+">"+d.target.id)?2.4:1)
+    .attr("opacity",d=>{const k=d.source.id+">"+d.target.id;
+      if(usedKey.has(k))return 1; return sel.has(d.source.id)&&sel.has(d.target.id)?.5:.18;});
+  // arc pulse on entry nodes
+  nodeSel.filter(d=>entry.has(d.id)).each(function(d){
+    const c=d3.select(this).append("circle").attr("r",11).attr("fill","none")
+      .attr("stroke","var(--arc)").attr("stroke-width",2).attr("opacity",.9);
+    c.transition().duration(620).attr("r",30).attr("opacity",0).remove();
+  });
+}
+
+function show(res){
+  const out=document.getElementById("out");
+  let html=`<h2>Load plan · ${res.rows.length||0} node${res.rows.length===1?"":"s"}</h2>`;
+  if(res.clarify){
+    html+=`<div class="clarify"><b>↯ Clarify first</b><br>${res.clarify}</div>`;
+  }
+  if(res.matched&&res.matched.length){
+    html+=`<div class="meta mono" style="margin:6px 0 10px;color:var(--muted)">matched on: ${res.matched.join(" · ")}</div>`;
+  }
+  res.rows.forEach(r=>{
+    html+=`<div class="row">
+      <span class="dot" style="background:${MOD_COLOR[r.modality]}"></span>
+      <div class="body">
+        <div class="ttl">${r.title}</div>
+        <div class="meta mono">
+          <span class="via ${r.via==='entry'?'entry':''}">${r.via}</span>
+          <span>${r.modality} · p${r.page}</span>
+          <span class="render ${r.cls}">${r.render}</span>
+        </div>
+      </div></div>`;
+  });
+  if(!res.rows.length&&!res.clarify)html=`<p class="empty">No match.</p>`;
+  out.innerHTML=html;
+}
+
+function run(q){
+  if(!q.trim())return;
+  document.getElementById("q").value=q;
+  const res=route(q);
+  paint(res); show(res);
+}
+
+/* sample chips */
+const SAMPLES=[
+  ["What's the duty cycle for MIG welding at 200A on 240V?","table → calculator"],
+  ["I'm getting porosity in my flux-cored welds. What should I check?","photo + cross-ref"],
+  ["What polarity setup do I need for TIG welding? Which socket does the ground clamp go in?","diagram"],
+  ["What's the duty cycle?","underspecified → clarify"],
+];
+const chips=document.getElementById("chips");
+SAMPLES.forEach(([q,t])=>{const b=document.createElement("button");b.className="chip";
+  b.innerHTML=`${q}<div class="tag mono">${t}</div>`;b.onclick=()=>run(q);chips.appendChild(b);});
+document.getElementById("q").addEventListener("keydown",e=>{if(e.key==="Enter")run(e.target.value);});
+
+setTimeout(()=>{for(let i=0;i<120;i++)sim.tick();tick();},60);
+</script>
+</body>
+</html>
