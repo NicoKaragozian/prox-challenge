@@ -1,182 +1,177 @@
 """
-router.py — Stage 1 (navigate) + render decision
+router.py — Stage 1 (route) + render decision   [STRUCTURE DEMO]
 
-Given a user query and the index.json graph, decide WHICH nodes to load
-before answering. This is the cheap/fast tier (Haiku in production): it never
-sees the full 48 pages, only the compact index.
+This is a demo of the *architecture*, not a retrieval engine. Stage 1 splits
+cleanly into two parts by who owns them:
 
-Pipeline:
-  1. score nodes against the query (entry-point selection)
-  2. graph traversal: expand entry nodes 1 hop along typed edges
-  3. underspecification check -> maybe ask a clarifying question instead
-  4. render decision: for the winning nodes, pick the output modality
-       (surface manual image | generate interactive artifact | text)
+  • ENTRY-POINT SELECTION  — "which node(s) answer this question?"
+    This is the MODEL's job. In production a cheap tier (Haiku, or an embedding
+    lookup) reads the compact index and returns node ids. There is deliberately
+    NO keyword scorer here pretending to be smart — instead each scenario
+    DECLARES the entry nodes the router would return, so the demo is honest and
+    deterministic. route_with_llm() shows the real call (same contract).
 
-The deterministic scorer below is the OFFLINE fallback so the demo runs with
-no API key. route_with_llm() shows where the Haiku call slots in — same
-contract (query + index -> node ids), better recall on paraphrases.
+  • TRAVERSAL + RENDER DECISION  — given the entry nodes, everything downstream
+    is pure structure, and THIS is real code:
+      - bounded 1-hop traversal along a TYPED, DIRECTED relation policy
+      - underspecification check (missing params -> clarify, don't answer)
+      - per-node render decision (surface image | generate artifact | text)
+
+The point of the demo is to show the graph machinery, not to score text.
 """
 
-import json, re
+import json
 from pathlib import Path
 
 IDX = json.loads(Path("index.json").read_text())
 NODES = {n["id"]: n for n in IDX["nodes"]}
-EDGES = IDX["edges"]
 
-# adjacency (undirected for traversal, but we keep the relation label)
-ADJ = {}
-for e in EDGES:
-    ADJ.setdefault(e["src"], []).append((e["dst"], e["rel"]))
-    ADJ.setdefault(e["dst"], []).append((e["src"], e["rel"]))
+# --- Relation policy -------------------------------------------------------
+# Edges are typed AND directed; traversal respects direction (this is the
+# whole reason cross-referencing works without dragging in noise).
+#
+#   cause_of / prerequisite  -> followed FORWARD only. Direction is meaningful:
+#       a DEFECT points to its root CAUSES; a TASK points to its PREREQUISITES.
+#       Walking them backward (from a cause to every defect it could produce)
+#       is noise, so we don't.
+#   same_process             -> symmetric (MIG nodes cluster with MIG nodes).
+# These three PULL content into the load set.
+#
+#   related                  -> soft. Surfaced as "see also", never auto-loaded.
+#   contains / part_of       -> structural. Never traversed for loading.
+LOAD_DIRECTED  = {"cause_of", "prerequisite"}
+LOAD_SYMMETRIC = {"same_process"}
+SEE_ALSO       = {"related"}
 
-# which modalities should be RENDERED, not described
+OUT, SOFT = {}, {}
+for e in IDX["edges"]:
+    s, d, r = e["src"], e["dst"], e["rel"]
+    if r in LOAD_DIRECTED:
+        OUT.setdefault(s, []).append((d, r))
+    elif r in LOAD_SYMMETRIC:
+        OUT.setdefault(s, []).append((d, r))
+        OUT.setdefault(d, []).append((s, r))
+    elif r in SEE_ALSO:
+        SOFT.setdefault(s, []).append(d)
+        SOFT.setdefault(d, []).append(s)
+
+# --- Render policy ---------------------------------------------------------
+# This is what makes the output multimodal: the decision is keyed off node
+# modality, decided here at route time (not left to the answer model's whim).
 SURFACE_IMAGE = {"diagram", "photo", "schematic"}
 BUILD_ARTIFACT = {            # node_id -> kind of interactive artifact to generate
-    "duty_cycle_table":     "duty-cycle calculator",
-    "penetration_control":  "settings configurator (process+material+thickness -> wire speed & voltage)",
-    "troubleshooting":      "troubleshooting flowchart",
+    "duty_cycle_table":    "duty-cycle calculator",
+    "penetration_control": "settings configurator (process+material+thickness -> wire speed & voltage)",
+    "troubleshooting":     "troubleshooting flowchart",
 }
 
-# queries that are ambiguous without a parameter -> clarify first
+# Nodes whose answer is meaningless without parameters -> clarify before answering.
 NEEDS_PARAMS = {
     "duty_cycle_table": ["process (MIG/TIG/Stick)", "amperage", "input voltage (120V/240V)"],
 }
 
-
-QSTOP = set("the a an of to and or for with on in is be are this that your you it "
-            "do not what which does i'm im need get getting should my me at as".split())
-
-def tokenize(s, drop_stop=False):
-    toks = set(re.findall(r"[a-z0-9][a-z0-9\-]{2,}", s.lower()))
-    return toks - QSTOP if drop_stop else toks
-
-
-def score(query):
-    q = tokenize(query, drop_stop=True)
-    out = []
-    for n in IDX["nodes"]:
-        kws = set(n.get("keywords", [])) | set(n.get("auto_keywords", []))
-        # expand multiword keywords into tokens too
-        kw_tokens = set()
-        for k in kws:
-            kw_tokens |= tokenize(k)
-        hits = q & kw_tokens
-        # answerable-question overlap is a strong signal
-        ans_tokens = set()
-        for a in n.get("answers", []):
-            ans_tokens |= tokenize(a)
-        ans_hits = q & ans_tokens
-        s = 2 * len(hits) + 3 * len(ans_hits)
-        # assets beat their parent section on ties (more specific)
-        if n["type"] == "asset":
-            s += 0.5 if s > 0 else 0
-        if s > 0:
-            out.append((s, n["id"], sorted(hits | ans_hits)))
-    return sorted(out, reverse=True)
+# --- Scenarios -------------------------------------------------------------
+# Each entry is what the routing TIER (Haiku / embeddings) would return for a
+# question: the entry node id(s) it selects + the structured params it extracted.
+# We declare these instead of scoring text — see module docstring.
+SCENARIOS = [
+    {"q": "What's the duty cycle for MIG welding at 200A on 240V?",
+     "entry": ["duty_cycle_table"],
+     "params": ["process (MIG/TIG/Stick)", "amperage", "input voltage (120V/240V)"],
+     "note": "fully specified -> direct table lookup, no hop needed"},
+    {"q": "I'm getting porosity in my flux-cored welds. What should I check?",
+     "entry": ["weld_diagnosis"], "params": [],
+     "note": "defect node -> cause_of edges pull the candidate root causes"},
+    {"q": "What polarity setup do I need for TIG welding? Which socket does the ground clamp go in?",
+     "entry": ["tig_polarity"], "params": [],
+     "note": "direct diagram surface; cause_of is incoming, so nothing extra is pulled"},
+    {"q": "What's the duty cycle?",
+     "entry": ["duty_cycle_table"], "params": [],
+     "note": "underspecified -> clarify before answering"},
+]
 
 
-def route(query, top_k=3, hops=1, rel_thresh=0.6):
-    ranked = score(query)
-    if not ranked:
-        return {"query": query, "clarify": "No match in index — rephrase or escalate to full-text search.", "nodes": []}
+def render_row(nid, via):
+    n = NODES[nid]
+    if nid in BUILD_ARTIFACT:
+        action = f"GENERATE artifact: {BUILD_ARTIFACT[nid]}"
+    elif n["modality"] in SURFACE_IMAGE:
+        action = f"SURFACE image (rasterize p{n['pages'][0]})"
+    else:
+        action = "TEXT (grounded from page text)"
+    return {"id": nid, "title": n["title"], "page": n["pages"][0],
+            "modality": n["modality"], "via": via, "render": action}
 
-    # keep entries close to the best score (a dominant match enters alone)
-    best = ranked[0][0]
-    entry = [nid for s, nid, _ in ranked[:top_k] if s >= rel_thresh * best]
 
-    # underspecification check on the top entry node
+def route(entry, params_present, query=None, max_fanout=4):
+    """Given the entry node(s) the router selected, traverse + decide render."""
     top = entry[0]
+
+    # 1. underspecification check on the entry node
     if top in NEEDS_PARAMS:
-        missing = [p for p in NEEDS_PARAMS[top] if not _mentions(query, p)]
+        missing = [p for p in NEEDS_PARAMS[top] if p not in params_present]
         if missing:
-            return {
-                "query": query,
-                "entry": entry,
-                "clarify": f"'{NODES[top]['title']}' needs: {', '.join(missing)}. Ask the user before answering.",
-                "nodes": entry,
-            }
+            return {"query": query, "entry": entry,
+                    "clarify": f"'{NODES[top]['title']}' needs: {', '.join(missing)}. "
+                               f"Ask the user before answering.",
+                    "loaded": [], "see_also": [], "plan": []}
 
-    # graph traversal: expand neighbors along SEMANTIC edges only
-    # (skip contains/part_of which just pull whole section families)
-    TRAVERSE = {"cause_of", "related", "prerequisite", "same_process"}
-    selected = list(entry)
-    frontier = list(entry)
-    for _ in range(hops):
-        nxt = []
-        for nid in frontier:
-            nbrs = [(nb, rel) for nb, rel in ADJ.get(nid, []) if rel in TRAVERSE]
-            for nb, rel in nbrs[:4]:            # cap fan-out
-                if nb not in selected:
-                    selected.append(nb)
-                    nxt.append(nb)
-        frontier = nxt
+    # 2. 1-hop directed traversal along the typed load-edges
+    via = {nid: "entry" for nid in entry}
+    loaded = list(entry)
+    for nid in entry:
+        for nb, rel in OUT.get(nid, [])[:max_fanout]:
+            if nb not in via:
+                via[nb] = rel
+                loaded.append(nb)
 
-    # render decision per selected node
-    plan = []
-    for nid in selected:
-        n = NODES[nid]
-        if nid in BUILD_ARTIFACT:
-            action = f"GENERATE artifact: {BUILD_ARTIFACT[nid]}"
-        elif n["modality"] in SURFACE_IMAGE:
-            action = f"SURFACE image (rasterize p{n['pages'][0]} crop)"
-        else:
-            action = "TEXT (grounded from page text)"
-        plan.append({
-            "id": nid, "title": n["title"], "page": n["pages"][0],
-            "modality": n["modality"], "via": "entry" if nid in entry else "graph-hop",
-            "render": action,
-        })
-    return {"query": query, "entry": entry, "matched": ranked[0][2], "nodes": selected, "plan": plan}
+    # 3. soft "see also" suggestions (related edges — surfaced, not loaded)
+    see_also = []
+    for nid in loaded:
+        for nb in SOFT.get(nid, []):
+            if nb not in via and nb not in see_also:
+                see_also.append(nb)
 
-
-def _mentions(query, param):
-    # crude param presence check for the demo
-    keys = {
-        "process (MIG/TIG/Stick)": ["mig", "tig", "stick", "flux"],
-        "amperage": [r"\d+\s*a", "amp"],
-        "input voltage (120V/240V)": ["120", "240", "volt"],
-    }
-    ql = query.lower()
-    return any(re.search(k, ql) for k in keys.get(param, []))
+    # 4. render decision per loaded node
+    plan = [render_row(nid, via[nid]) for nid in loaded]
+    return {"query": query, "entry": entry, "loaded": loaded,
+            "see_also": see_also, "plan": plan}
 
 
 def route_with_llm(query):
-    """Production tier-1 (sketch). Same contract, better paraphrase recall."""
+    """Production entry-point selection (sketch). Same contract: query -> node ids."""
     raise NotImplementedError("""
     from anthropic import Anthropic
     client = Anthropic()
+    # hand the cheap tier ONLY the compact index (~2k tokens), never full pages
     compact = [{k: n[k] for k in ('id','title','modality','pages','summary')} for n in IDX['nodes']]
     msg = client.messages.create(
         model="claude-haiku-4-5",            # cheap/fast routing tier
         max_tokens=300,
         system="You are a router. Given an index of manual nodes and a user "
-               "question, return ONLY a JSON list of node ids most relevant. "
+               "question, return ONLY JSON: {\\"entry\\": [node ids], \\"params\\": [...]}. "
                "Prefer specific asset nodes over sections.",
         messages=[{"role":"user","content": json.dumps({'index':compact,'query':query})}],
     )
-    return json.loads(msg.content[0].text)
+    sel = json.loads(msg.content[0].text)
+    return route(sel['entry'], sel.get('params', []), query)   # same downstream path
     """)
 
 
-SAMPLES = [
-    "What's the duty cycle for MIG welding at 200A on 240V?",
-    "I'm getting porosity in my flux-cored welds. What should I check?",
-    "What polarity setup do I need for TIG welding? Which socket does the ground clamp go in?",
-    "What's the duty cycle?",  # deliberately underspecified -> should clarify
-]
-
 if __name__ == "__main__":
-    for q in SAMPLES:
-        r = route(q)
+    for sc in SCENARIOS:
+        r = route(sc["entry"], sc["params"], sc["q"])
         print("\n" + "=" * 78)
-        print("Q:", q)
+        print("Q:", sc["q"])
+        print("  ·", sc["note"])
+        print("  router selects entry:", r["entry"], "(declared — Haiku's job in prod)")
         if r.get("clarify"):
             print("  ↳ CLARIFY:", r["clarify"])
-            if not r.get("plan"):
-                continue
-        print("  entry:", r.get("entry"), "| matched on:", r.get("matched"))
-        for p in r.get("plan", []):
-            tag = "•" if p["via"] == "entry" else "↳"
-            print(f"   {tag} [{p['modality']:9}] p{p['page']:<2} {p['title']}")
+            continue
+        for p in r["plan"]:
+            tag = "•" if p["via"] == "entry" else f"↳ {p['via']}"
+            print(f"   {tag:14} [{p['modality']:9}] p{p['page']:<2} {p['title']}")
             print(f"       → {p['render']}")
+        if r["see_also"]:
+            sa = ", ".join(NODES[i]["title"] for i in r["see_also"])
+            print(f"   see also (related, not loaded): {sa}")

@@ -44,11 +44,8 @@
   }
   .ask{padding:16px; border-bottom:1px solid var(--line)}
   .ask label{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted)}
-  .ask input{
-    width:100%; margin-top:8px; padding:10px 12px; background:var(--bg);
-    border:1px solid var(--line); border-radius:8px; color:var(--ink); font-size:13px;
-  }
-  .ask input:focus{outline:none; border-color:var(--arc)}
+  .ask .note{font-size:11px; color:var(--muted); line-height:1.5; margin:12px 0 0}
+  .ask .note b{color:var(--ink); font-weight:600}
   .chips{display:flex; flex-direction:column; gap:6px; margin-top:10px}
   .chip{
     text-align:left; cursor:pointer; font-size:12px; line-height:1.3;
@@ -56,7 +53,9 @@
     border-radius:7px; color:var(--ink); transition:.12s;
   }
   .chip:hover{border-color:var(--arc); color:#fff}
+  .chip.on{border-color:var(--arc); color:#fff; background:var(--panel)}
   .chip .tag{font-size:10px; color:var(--muted)}
+  .ask h2,.out h2.sa{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:14px 0 4px}
 
   .out{flex:1; overflow-y:auto; padding:16px}
   .out h2{font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 4px}
@@ -121,12 +120,12 @@
 
   <aside>
     <div class="ask">
-      <label>User question</label>
-      <input id="q" placeholder="ask the welder…" autocomplete="off"/>
+      <label>Scenario · click to trace</label>
       <div class="chips" id="chips"></div>
+      <p class="note">The <b>entry node</b> is what the routing tier (Haiku / embeddings) returns — <b>declared per scenario</b> here, not scored. Everything after it — typed-edge traversal and the render decision — is computed live. This is a structure demo, not a retrieval engine.</p>
     </div>
     <div class="out" id="out">
-      <p class="empty">Pick a question. The fast model reads only the <b>index</b> (titles + modality + keywords, ~2k tokens), selects an entry node, then walks the graph along semantic edges. Only the selected nodes get loaded — full pages and rasterized diagrams — before the answer model runs.</p>
+      <p class="empty">Pick a scenario. The router selects an <b>entry node</b>, then the graph is walked along <b>typed, directed edges</b>: <span style="color:var(--molten)">cause_of</span> / prerequisite pull root causes &amp; prereqs, <span style="color:var(--arc)">related</span> is surfaced as “see also” but not loaded. Only loaded nodes — full pages + rasterized diagrams — reach the answer model.</p>
     </div>
   </aside>
 </main>
@@ -158,56 +157,51 @@ const DATA = {"nodes":[{"id":"safety","type":"section","title":"Safety","pages":
 const MOD_COLOR={text:"#5b6b7d",table:"#f2b441",diagram:"#4cc38a",photo:"#e85c9b",schematic:"#4dd9ff",matrix:"#a986f0",section:"#46566a"};
 const SURFACE=new Set(["diagram","photo","schematic"]);
 const ARTIFACT={duty_cycle_table:"duty-cycle calculator",penetration_control:"settings configurator",troubleshooting:"troubleshooting flowchart"};
-const TRAVERSE=new Set(["cause_of","related","prerequisite","same_process"]);
 const NEEDS={duty_cycle_table:["process","amperage","voltage"]};
 const N=Object.fromEntries(DATA.nodes.map(n=>[n.id,n]));
 
-/* adjacency with relation */
-const ADJ={};
-DATA.edges.forEach(e=>{(ADJ[e.src]=ADJ[e.src]||[]).push([e.dst,e.rel]);(ADJ[e.dst]=ADJ[e.dst]||[]).push([e.src,e.rel]);});
+/* relation policy — typed AND directed (see router.py):
+   cause_of/prerequisite are followed FORWARD only, same_process is symmetric;
+   these PULL content. related is soft "see also" (surfaced, not loaded).
+   contains/part_of are structural and never traversed. */
+const OUT={}, SOFT={};
+DATA.edges.forEach(e=>{
+  if(e.rel==="cause_of"||e.rel==="prerequisite"){(OUT[e.src]=OUT[e.src]||[]).push([e.dst,e.rel]);}
+  else if(e.rel==="same_process"){(OUT[e.src]=OUT[e.src]||[]).push([e.dst,e.rel]);(OUT[e.dst]=OUT[e.dst]||[]).push([e.src,e.rel]);}
+  else if(e.rel==="related"){(SOFT[e.src]=SOFT[e.src]||[]).push(e.dst);(SOFT[e.dst]=SOFT[e.dst]||[]).push(e.src);}
+});
 
-const QSTOP=new Set("the a an of to and or for with on in is be are this that your you it do not what which does i'm im need get getting should my me at as go in".split(" "));
-const tok=(s,drop=false)=>{let t=new Set((s.toLowerCase().match(/[a-z0-9][a-z0-9\-]{2,}/g)||[]));if(drop)QSTOP.forEach(w=>t.delete(w));return t;};
+/* scenarios: entry = what the routing tier (Haiku/embeddings) returns (declared),
+   params = the structured params it extracted. No text scoring — this is a
+   structure demo, the model owns entry selection. */
+const SCENARIOS=[
+  {q:"What's the duty cycle for MIG welding at 200A on 240V?",entry:["duty_cycle_table"],params:["process","amperage","voltage"],tag:"specified → table → calculator"},
+  {q:"I'm getting porosity in my flux-cored welds. What should I check?",entry:["weld_diagnosis"],params:[],tag:"defect → cause_of hops"},
+  {q:"What polarity setup do I need for TIG welding? Which socket does the ground clamp go in?",entry:["tig_polarity"],params:[],tag:"direct diagram, no hop"},
+  {q:"What's the duty cycle?",entry:["duty_cycle_table"],params:[],tag:"underspecified → clarify"},
+];
 
-function score(query){
-  const q=tok(query,true), out=[];
-  for(const n of DATA.nodes){
-    let kw=new Set([...(n.keywords||[]),...(n.auto_keywords||[])]), kt=new Set();
-    kw.forEach(k=>tok(k).forEach(x=>kt.add(x)));
-    let at=new Set(); (n.answers||[]).forEach(a=>tok(a).forEach(x=>at.add(x)));
-    let hits=[...q].filter(x=>kt.has(x)), ah=[...q].filter(x=>at.has(x));
-    let s=2*hits.length+3*ah.length;
-    if(n.type==="asset"&&s>0)s+=0.5;
-    if(s>0)out.push({s,id:n.id,hits:[...new Set([...hits,...ah])]});
-  }
-  return out.sort((a,b)=>b.s-a.s);
-}
-function mentions(q,p){const l=q.toLowerCase();const m={process:["mig","tig","stick","flux"],amperage:[/\d+\s*a/,"amp"],voltage:["120","240","volt"]};return (m[p]||[]).some(k=>k instanceof RegExp?k.test(l):l.includes(k));}
+function renderRow(id,via){const n=N[id];let render,cls;
+  if(ARTIFACT[id]){render="GENERATE "+ARTIFACT[id];cls="generate";}
+  else if(SURFACE.has(n.modality)){render=`SURFACE p${n.pages[0]} image`;cls="surface";}
+  else{render="TEXT (grounded)";cls="text";}
+  return{id,title:n.title,page:n.pages[0],modality:n.modality,via,render,cls};}
 
-function route(query){
-  const ranked=score(query);
-  if(!ranked.length)return{query,clarify:"No index match — escalate to full-text search.",rows:[],edges:[],entry:[]};
-  const best=ranked[0].s;
-  const entry=ranked.filter(r=>r.s>=0.6*best).slice(0,3).map(r=>r.id);
-  const top=entry[0];
-  if(NEEDS[top]){const miss=NEEDS[top].filter(p=>!mentions(query,p));
-    if(miss.length)return{query,entry,clarify:`“${N[top].title}” needs: ${miss.join(", ")}. Ask the user before answering.`,rows:[],edges:[]};}
-  // traverse semantic edges, 1 hop, cap fan-out
-  const sel=[...entry], used=[];
-  for(const nid of entry){
-    let c=0;
-    for(const [nb,rel] of (ADJ[nid]||[])){
-      if(!TRAVERSE.has(rel))continue;
-      if(c++>=4)break;
-      if(!sel.includes(nb)){sel.push(nb);used.push({src:nid,dst:nb,rel});}
-    }
-  }
-  const rows=sel.map(id=>{const n=N[id];let render,cls;
-    if(ARTIFACT[id]){render="GENERATE "+ARTIFACT[id];cls="generate";}
-    else if(SURFACE.has(n.modality)){render=`SURFACE p${n.pages[0]} image`;cls="surface";}
-    else{render="TEXT (grounded)";cls="text";}
-    return{id,title:n.title,page:n.pages[0],modality:n.modality,via:entry.includes(id)?"entry":"hop",render,cls};});
-  return{query,entry,rows,edges:used,matched:ranked[0].hits};
+function route(sc){
+  const entry=sc.entry, top=entry[0];
+  // underspecification check -> clarify, don't answer
+  if(NEEDS[top]){const miss=NEEDS[top].filter(p=>!sc.params.includes(p));
+    if(miss.length)return{entry,clarify:`“${N[top].title}” needs: ${miss.join(", ")}. Ask the user before answering.`,loaded:[],seeAlso:[],hops:[],rows:[]};}
+  // 1-hop directed traversal along typed load-edges
+  const via={}, loaded=[...entry], hops=[];
+  entry.forEach(id=>via[id]="entry");
+  entry.forEach(id=>{(OUT[id]||[]).slice(0,4).forEach(([nb,rel])=>{
+    if(via[nb]===undefined){via[nb]=rel;loaded.push(nb);hops.push({src:id,dst:nb,rel});}});});
+  // soft see-also (related — surfaced, not loaded)
+  const seen=new Set(loaded), seeAlso=[];
+  loaded.forEach(id=>(SOFT[id]||[]).forEach(nb=>{if(!seen.has(nb)&&!seeAlso.includes(nb))seeAlso.push(nb);}));
+  const rows=loaded.map(id=>renderRow(id,via[id]));
+  return{entry,clarify:null,loaded,seeAlso,hops,rows};
 }
 
 /* ---------- render graph ---------- */
@@ -254,23 +248,23 @@ const ml=document.getElementById("modLegend");
 
 /* ---------- interaction / highlight ---------- */
 function paint(res){
-  const sel=new Set(res.rows.map(r=>r.id).concat(res.entry||[]));
-  const entry=new Set(res.entry||[]);
-  const usedKey=new Set(res.edges.map(e=>e.src+">"+e.dst).concat(res.edges.map(e=>e.dst+">"+e.src)));
+  const loaded=new Set(res.loaded||[]), entry=new Set(res.entry||[]), see=new Set(res.seeAlso||[]);
+  const active=new Set([...loaded,...see]);
+  const hopKey=new Set((res.hops||[]).map(h=>h.src+">"+h.dst).concat((res.hops||[]).map(h=>h.dst+">"+h.src)));
   nodeSel.select("circle").transition().duration(280)
-    .attr("opacity",d=> sel.size? (sel.has(d.id)?1:0.12):1)
+    .attr("opacity",d=> active.size? (loaded.has(d.id)?1:(see.has(d.id)?.5:0.12)):1)
     .attr("stroke",d=> entry.has(d.id)?"var(--arc)": (d.type==="section"?MOD_COLOR.section:"#0b0e13"))
     .attr("stroke-width",d=> entry.has(d.id)?3:1.5)
     .attr("r",d=> entry.has(d.id)?(d.type==="section"?14:11):(d.type==="section"?12:8));
-  nodeSel.select("text").attr("class",d=>"nodeLabel"+(sel.has(d.id)?" on":""))
-    .transition().duration(280).attr("opacity",d=> sel.size?(sel.has(d.id)?1:0.15):1);
+  nodeSel.select("text").attr("class",d=>"nodeLabel"+(active.has(d.id)?" on":""))
+    .transition().duration(280).attr("opacity",d=> active.size?(loaded.has(d.id)?1:(see.has(d.id)?.6:0.15)):1);
   linkSel.transition().duration(280)
     .attr("stroke",d=>{const k=d.source.id+">"+d.target.id;
-      if(usedKey.has(k))return d.rel==="cause_of"?"var(--molten)":"var(--arc)";
+      if(hopKey.has(k))return d.rel==="cause_of"?"var(--molten)":"var(--arc)";
       return d.rel==="contains"?"var(--faint)":"#2b3947";})
-    .attr("stroke-width",d=>usedKey.has(d.source.id+">"+d.target.id)?2.4:1)
+    .attr("stroke-width",d=>hopKey.has(d.source.id+">"+d.target.id)?2.4:1)
     .attr("opacity",d=>{const k=d.source.id+">"+d.target.id;
-      if(usedKey.has(k))return 1; return sel.has(d.source.id)&&sel.has(d.target.id)?.5:.18;});
+      if(hopKey.has(k))return 1; return active.has(d.source.id)&&active.has(d.target.id)?.45:.16;});
   // arc pulse on entry nodes
   nodeSel.filter(d=>entry.has(d.id)).each(function(d){
     const c=d3.select(this).append("circle").attr("r",11).attr("fill","none")
@@ -281,13 +275,11 @@ function paint(res){
 
 function show(res){
   const out=document.getElementById("out");
-  let html=`<h2>Load plan · ${res.rows.length||0} node${res.rows.length===1?"":"s"}</h2>`;
   if(res.clarify){
-    html+=`<div class="clarify"><b>↯ Clarify first</b><br>${res.clarify}</div>`;
+    out.innerHTML=`<div class="clarify"><b>↯ Clarify first</b><br>${res.clarify}</div>`;
+    return;
   }
-  if(res.matched&&res.matched.length){
-    html+=`<div class="meta mono" style="margin:6px 0 10px;color:var(--muted)">matched on: ${res.matched.join(" · ")}</div>`;
-  }
+  let html=`<h2>Load plan · ${res.rows.length} node${res.rows.length===1?"":"s"}</h2>`;
   res.rows.forEach(r=>{
     html+=`<div class="row">
       <span class="dot" style="background:${MOD_COLOR[r.modality]}"></span>
@@ -300,28 +292,28 @@ function show(res){
         </div>
       </div></div>`;
   });
-  if(!res.rows.length&&!res.clarify)html=`<p class="empty">No match.</p>`;
+  if(res.seeAlso&&res.seeAlso.length){
+    html+=`<h2 class="sa">See also · related (not loaded)</h2>`;
+    res.seeAlso.forEach(id=>{const n=N[id];
+      html+=`<div class="row" style="opacity:.65">
+        <span class="dot" style="background:${MOD_COLOR[n.modality]}"></span>
+        <div class="body"><div class="ttl">${n.title}</div>
+        <div class="meta mono"><span class="via">related</span><span>${n.modality} · p${n.pages[0]}</span></div>
+        </div></div>`;});
+  }
   out.innerHTML=html;
 }
 
-function run(q){
-  if(!q.trim())return;
-  document.getElementById("q").value=q;
-  const res=route(q);
+function run(sc){
+  const res=route(sc);
   paint(res); show(res);
+  document.querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.q===sc.q));
 }
 
-/* sample chips */
-const SAMPLES=[
-  ["What's the duty cycle for MIG welding at 200A on 240V?","table → calculator"],
-  ["I'm getting porosity in my flux-cored welds. What should I check?","photo + cross-ref"],
-  ["What polarity setup do I need for TIG welding? Which socket does the ground clamp go in?","diagram"],
-  ["What's the duty cycle?","underspecified → clarify"],
-];
+/* scenario chips (no free-text input — the model owns entry selection) */
 const chips=document.getElementById("chips");
-SAMPLES.forEach(([q,t])=>{const b=document.createElement("button");b.className="chip";
-  b.innerHTML=`${q}<div class="tag mono">${t}</div>`;b.onclick=()=>run(q);chips.appendChild(b);});
-document.getElementById("q").addEventListener("keydown",e=>{if(e.key==="Enter")run(e.target.value);});
+SCENARIOS.forEach(sc=>{const b=document.createElement("button");b.className="chip";b.dataset.q=sc.q;
+  b.innerHTML=`${sc.q}<div class="tag mono">${sc.tag}</div>`;b.onclick=()=>run(sc);chips.appendChild(b);});
 
 setTimeout(()=>{for(let i=0;i<120;i++)sim.tick();tick();},60);
 </script>

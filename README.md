@@ -42,19 +42,19 @@ INGEST (build_index.py) → ROUTE/Haiku (router.py) → LOAD → ANSWER/Opus →
 |------|-------|--------|
 | `build_index.py` | **0 · Ingest** — parse the PDF into a typed graph (`index.json`). Structure (pages, table/image counts → modality) is auto-detected; the semantic layer is curated + grounded here, LLM-generated at ingest in prod. | ✅ real |
 | `index.json` | The built graph: 20 nodes, 28 edges. | ✅ real |
-| `router.py` | **1 · Route** — score query → entry node → graph traversal → underspecification (clarify) check → per-node render decision. Deterministic offline scorer so it runs with **no API key**; `route_with_llm()` shows the Haiku call (same contract). | ✅ real |
-| `graph_demo.html` | Interactive visualization — type a question, watch the entry node strike and current flow along the cross-reference edges; side panel shows the load plan with per-node render decisions. Self-contained (graph inlined). | ✅ real |
+| `router.py` | **1 · Route** — the traversal + render machinery: directed typed-edge walk → underspecification (clarify) check → per-node render decision. **Entry-point selection is the model's job** (Haiku / embeddings), so it's *declared per scenario* rather than faked with a keyword scorer; `route_with_llm()` shows the real call (same contract). Runs with **no API key**. | ✅ real |
+| `graph_demo.html` | Interactive visualization — click a scenario, watch the entry node strike and current flow forward along the cross-reference edges; side panel shows the load plan, `related` "see also" nodes, and per-node render decisions. Self-contained (graph inlined). | ✅ real |
 | **Stages 2–4** | Load pages + Opus answer + artifact *generation* (duty-cycle calculator, settings configurator, troubleshooting flowchart) and the Agent SDK + frontend wiring. | 🚧 specified, next |
 
 ## Run
 
-No API key needed — the demo runs on a deterministic offline scorer.
+No API key needed — entry nodes are declared per scenario, so the demo is fully deterministic.
 
 ```bash
 # interactive visualization (self-contained, nothing to install)
 open graph_demo.html
 
-# routing trace on the challenge's 3 sample questions + 1 underspecified one
+# traversal + render plan for the challenge's 3 sample questions + 1 underspecified one
 python router.py
 
 # (optional) rebuild the graph from the PDF
